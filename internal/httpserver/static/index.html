@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <title>Поиск заказа</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="/static/style.css" />
+  <script defer src="/static/app.js"></script>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Поиск заказа</h1>
+    <form id="searchForm">
+      <input id="orderInput" type="text" placeholder="Введите order_id, например: b563feb7b2b84b6test" autocomplete="off" />
+      <button id="searchBtn" type="submit">Найти</button>
+    </form>
+
+    <div class="status" id="status">Введите ID и нажмите «Найти».</div>
+    <div class="meta" id="meta"></div>
+
+    <div class="card" id="result" hidden>
+      <div class="summary" id="summary" hidden></div>
+      <pre id="json"></pre>
+    </div>
+
+    <div class="history" id="history" hidden>
+      Недавние запросы:
+      <span id="historyList"></span>
+    </div>
+  </div>
+</body>
+</html>
