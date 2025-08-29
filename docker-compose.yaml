@@ -6,7 +6,7 @@ services:
       image: bitnami/kafka:3.7
       container_name: kafka
       ports:
-        - "${KAFKA_PORT_EXT}:${KAFKA_PORT}"
+        - "${KAFKA_PORT_EXT}:${KAFKA_PORT_EXT}"
       environment:
         - KAFKA_CFG_NODE_ID=1
         - KAFKA_CFG_PROCESS_ROLES=broker,controller
@@ -16,7 +16,7 @@ services:
         - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://${KAFKA_INTERNAL},EXTERNAL://${KAFKA_EXTERNAL}
         - KAFKA_CFG_INTER_BROKER_LISTENER_NAME=PLAINTEXT
         - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=1@kafka:9093
-        - KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE=true
+        - KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE=false
         - ALLOW_PLAINTEXT_LISTENER=yes
       volumes:
         - kafka_data:/bitnami/kafka
@@ -29,12 +29,26 @@ services:
     #   image: postgres:15
     #   container_name: postgres
     #   ports:
-    #     - "${POSTGRES_PORT}:5432"
+    #     - "${POSTGRES_PORT_EXTERNAL}:${POSTGRES_PORT_INTERNAL}"
     #   environment:
     #     POSTGRES_USER: demo_user
     #     POSTGRES_PASSWORD: demo_pass
     #     POSTGRES_DB: demo_db
     #   volumes:
+    #     - ./initdb:/docker-entrypoint-initdb.d
     #     - pg_data:/var/lib/postgresql/data
+    kafka-ui:
+      image: provectuslabs/kafka-ui:latest
+      container_name: kafka-ui
+      ports:
+        - "8080:8080"
+      depends_on:
+        kafka:
+          condition: service_healthy
+      environment:
+        - KAFKA_CLUSTERS_0_NAME=local
+        - KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=kafka:9092
+        - DYNAMIC_CONFIG_ENABLED=true
 volumes:
   kafka_data:
+  pg_data:

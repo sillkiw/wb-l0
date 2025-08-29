@@ -23,7 +23,9 @@ func main() {
 	topic := os.Getenv("KAFKA_TOPIC")
 	countStr := os.Getenv("PRODUCER_COUNT")
 	intervalStr := os.Getenv("PRODUCER_INTERVAL")
-	fmt.Printf("broker ADASDA %s\n", broker)
+
+	log.Printf("Broker = %s", broker)
+	log.Printf("topic = %s", topic)
 	count, _ := strconv.Atoi(countStr)
 	interval, err := time.ParseDuration(intervalStr)
 	if err != nil {
@@ -69,6 +71,6 @@ func checkKafkaConnection(broker string) error {
 		return fmt.Errorf("failed to read partitions: %w", err)
 	}
 
-	fmt.Printf("✅ Kafka connected, %d partitions found\n", len(partitions))
+	fmt.Printf("Kafka connected, %d partitions found\n", len(partitions))
 	return nil
 }
