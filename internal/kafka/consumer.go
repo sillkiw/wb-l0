@@ -14,7 +14,6 @@ type Consumer struct {
 type Message struct {
 	Key       []byte
 	Value     []byte
-	Headers   map[string]string
 	Partition int
 	Offset    int64
 	Topic     string
@@ -23,35 +22,44 @@ type Message struct {
 
 func NewReader(brokers []string, topic string, groupID string) *Consumer {
 	reader := kafka.NewReader(kafka.ReaderConfig{
-		Brokers: brokers,
-		Topic:   topic,
-		GroupID: groupID,
+		Brokers:        brokers,
+		Topic:          topic,
+		GroupID:        groupID,
+		CommitInterval: 0,
 	})
 	return &Consumer{reader: reader}
 }
 
-func (r *Consumer) ReadMessage(ctx context.Context) (m Message, err error) {
-	msg, err := r.reader.ReadMessage(ctx)
-
+func (c *Consumer) FetchMessage(ctx context.Context) (Message, error) {
+	msg, err := c.reader.FetchMessage(ctx)
 	if err != nil {
 		return Message{}, err
-	}
-
-	headers := make(map[string]string)
-	for _, h := range msg.Headers {
-		headers[h.Key] = string(h.Value)
 	}
 
 	return Message{
 		Key:       msg.Key,
 		Value:     msg.Value,
-		Headers:   headers,
+		Partition: msg.Partition,
 		Offset:    msg.Offset,
 		Topic:     msg.Topic,
 		Timestamp: msg.Time,
 	}, nil
 }
 
+func (c *Consumer) CommitMessages(ctx context.Context, msgs ...Message) error {
+	if len(msgs) == 0 {
+		return nil
+	}
+	kmsgs := make([]kafka.Message, len(msgs))
+	for i, m := range msgs {
+		kmsgs[i] = kafka.Message{
+			Topic:     m.Topic,
+			Partition: m.Partition,
+			Offset:    m.Offset,
+		}
+	}
+	return c.reader.CommitMessages(ctx, kmsgs...)
+}
 func (c *Consumer) Close() error {
 	return c.reader.Close()
 }

@@ -1,7 +1,6 @@
 services:
   kafka:
     image: bitnami/kafka:3.7
-    container_name: kafka
     environment:
       - KAFKA_CFG_NODE_ID=1
       - KAFKA_CFG_PROCESS_ROLES=broker,controller
@@ -20,10 +19,10 @@ services:
       interval: 5s
       timeout: 5s
       retries: 30
+    restart: unless-stopped
 
   postgres:
     image: postgres:15
-    container_name: postgres
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -35,6 +34,7 @@ services:
       interval: 5s
       timeout: 5s
       retries: 20
+    restart: unless-stopped
 
 volumes:
   kafka_data:

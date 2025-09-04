@@ -19,7 +19,7 @@ func main() {
 	if err := godotenv.Load(); err != nil {
 		log.Println(".env not found")
 	}
-	broker := os.Getenv("KAFKA_EXTERNAL")
+	broker := os.Getenv("KAFKA_BOOTSTRAP_EXTERNAL")
 	topic := os.Getenv("KAFKA_TOPIC")
 	countStr := os.Getenv("PRODUCER_COUNT")
 	intervalStr := os.Getenv("PRODUCER_INTERVAL")

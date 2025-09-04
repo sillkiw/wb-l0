@@ -37,7 +37,8 @@ up-db: ensure-env
 	$(DC) up -d $(INFRA_SERVICES)
 
 down-dev: ensure-env
-	$(DC) down -v
+	$(DC) down -v --remove-orphans
+
 
 logs: ensure-env
 	$(DC) logs -f --tail=200

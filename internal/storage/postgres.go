@@ -28,82 +28,6 @@ func NewStorage(connStr string) (*Storage, error) {
 	return &Storage{db: db}, nil
 }
 
-// func (s *Storage) SaveOrder(ctx context.Context, order domain.Order) error {
-// 	tx, err := s.db.BeginTx(ctx, nil)
-// 	if err != nil {
-// 		return fmt.Errorf("tx begin failed: %w", err)
-// 	}
-// 	defer tx.Rollback()
-
-// 	// --- orders ---
-// 	_, err = tx.ExecContext(ctx, `
-// 		INSERT INTO orders(order_uid, track_number, entry, locale, internal_signature, customer_id,
-// 			delivery_service, shardkey, sm_id, date_created, oof_shard)
-// 		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
-// 		ON CONFLICT (order_uid) DO NOTHING`,
-// 		order.OrderUID, order.TrackNumber, order.Entry, order.Locale,
-// 		order.InternalSignature, order.CustomerID, order.DeliveryService,
-// 		order.ShardKey, order.SmID, order.DateCreated, order.OofShard,
-// 	)
-// 	if err != nil {
-// 		return fmt.Errorf("insert order failed: %w", err)
-// 	}
-
-// 	// --- deliveries ---
-// 	_, err = tx.ExecContext(ctx, `
-// 		INSERT INTO deliveries(order_uid, name, phone, zip, city, address, region, email)
-// 		VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
-// 		ON CONFLICT (order_uid) DO NOTHING`,
-// 		order.OrderUID, order.Delivery.Name, order.Delivery.Phone,
-// 		order.Delivery.Zip, order.Delivery.City, order.Delivery.Address,
-// 		order.Delivery.Region, order.Delivery.Email,
-// 	)
-// 	if err != nil {
-// 		return fmt.Errorf("insert delivery failed: %w", err)
-// 	}
-
-// 	// --- payments ---
-// 	_, err = tx.ExecContext(ctx, `
-// 		INSERT INTO payments(transaction, order_uid, currency, provider, amount, payment_dt, bank,
-// 			delivery_cost, goods_total, custom_fee)
-// 		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
-// 		ON CONFLICT (transaction) DO NOTHING`,
-// 		order.Payment.Transaction, order.OrderUID, order.Payment.Currency,
-// 		order.Payment.Provider, order.Payment.Amount, order.Payment.PaymentDT,
-// 		order.Payment.Bank, order.Payment.DeliveryCost,
-// 		order.Payment.GoodsTotal, order.Payment.CustomFee,
-// 	)
-// 	if err != nil {
-// 		return fmt.Errorf("insert payment failed: %w", err)
-// 	}
-
-// 	// --- items (batch insert) ---
-// 	columns := []string{"order_uid", "chrt_id", "track_number", "price", "rid", "name",
-// 		"sale", "size", "total_price", "nm_id", "brand", "status"}
-
-// 	rows := [][]interface{}{}
-// 	for _, item := range order.Items {
-// 		rows = append(rows, []interface{}{
-// 			order.OrderUID, item.ChrtID, item.TrackNumber, item.Price,
-// 			item.RID, item.Name, item.Sale, item.Size,
-// 			item.TotalPrice, item.NmID, item.Brand, item.Status,
-// 		})
-// 	}
-
-// 	query, args := dbutils.BuildBatchInsert("items", columns, rows)
-// 	_, err = tx.ExecContext(ctx, query, args...)
-// 	if err != nil {
-// 		return fmt.Errorf("insert items failed: %w", err)
-// 	}
-
-// 	// --- commit ---
-// 	if err := tx.Commit(); err != nil {
-// 		return fmt.Errorf("tx commit failed: %w", err)
-// 	}
-
-// 	return nil
-// }
-
 func (s *Storage) SaveOrder(ctx context.Context, order domain.Order) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -210,4 +134,8 @@ func (s *Storage) SaveOrder(ctx context.Context, order domain.Order) error {
 		return fmt.Errorf("tx commit failed: %w", err)
 	}
 	return nil
+}
+
+func (s *Storage) Close() error {
+	return s.db.Close()
 }
