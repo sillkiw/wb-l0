@@ -22,13 +22,13 @@ func NewProducer(brokers []string, topic string) *Producer {
 	}
 }
 
-func (p *Producer) Send(key, value []byte) error {
+func (p *Producer) SendWithContext(ctx context.Context, key, value []byte) error {
 	msg := kafka.Message{
 		Key:   key,
 		Value: value,
 		Time:  time.Now(),
 	}
-	return p.writer.WriteMessages(context.Background(), msg)
+	return p.writer.WriteMessages(ctx, msg)
 }
 
 func (p *Producer) Close() error {

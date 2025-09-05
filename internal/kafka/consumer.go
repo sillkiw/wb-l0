@@ -26,6 +26,7 @@ func NewReader(brokers []string, topic string, groupID string) *Consumer {
 		Topic:          topic,
 		GroupID:        groupID,
 		CommitInterval: 0,
+		StartOffset:    kafka.FirstOffset,
 	})
 	return &Consumer{reader: reader}
 }

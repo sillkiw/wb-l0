@@ -1,76 +1,88 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
-	"fmt"
 	"log"
+	"log/slog"
 	"os"
-	"strconv"
+	"os/signal"
+	"strings"
+	"syscall"
 	"time"
 
+	"github.com/joho/godotenv"
+
+	"github.com/sillkiw/wb-l0/internal/config"
 	"github.com/sillkiw/wb-l0/internal/generator"
 	"github.com/sillkiw/wb-l0/internal/kafka"
-
-	"github.com/joho/godotenv"
-	k "github.com/segmentio/kafka-go"
+	"github.com/sillkiw/wb-l0/internal/logger"
 )
 
 func main() {
 	if err := godotenv.Load(); err != nil {
 		log.Println(".env not found")
 	}
-	broker := os.Getenv("KAFKA_BOOTSTRAP_EXTERNAL")
-	topic := os.Getenv("KAFKA_TOPIC")
-	countStr := os.Getenv("PRODUCER_COUNT")
-	intervalStr := os.Getenv("PRODUCER_INTERVAL")
+	cfg := config.LoadProducer()
 
-	log.Printf("Broker = %s", broker)
-	log.Printf("topic = %s", topic)
-	count, _ := strconv.Atoi(countStr)
-	interval, err := time.ParseDuration(intervalStr)
-	if err != nil {
-		interval = time.Second
-	}
+	// log
+	logg := logger.New(cfg.LogFormat, cfg.LogLevel)
 
-	producer := kafka.NewProducer([]string{broker}, topic)
+	// продьюсер
+	producer := kafka.NewProducer(cfg.KafkaBrokers, cfg.KafkaTopic)
 	defer producer.Close()
 
-	if err := checkKafkaConnection(broker); err != nil {
-		log.Printf("failed to connect %s", err)
-	}
+	// Эмуляция некорректных сообщений
+	cor := generator.NewCorruptor(cfg.BadRate, cfg.BadKinds)
+	logg.Info("bad messages enabled",
+		slog.Float64("rate", cfg.BadRate),
+		slog.String("kinds", cfg.BadKinds),
+	)
 
-	i := 0
-	for {
+	logg.Info("Emulator started",
+		slog.String("brokers", strings.Join(cfg.KafkaBrokers, ",")),
+		slog.String("topic", cfg.KafkaTopic),
+	)
+
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	for i := 0; cfg.Count == 0 || i < cfg.Count; i++ {
+		select {
+		case <-ctx.Done():
+			logg.Info("Stopping producer")
+			return
+		default:
+		}
+
 		order := generator.NewFakeOrder(i)
-		data, _ := json.Marshal(order)
+		data, err := json.Marshal(order)
+		if err != nil {
+			logg.Warn("marshal failed", slog.Any("err", err))
+			continue
+		}
 
-		if err := producer.Send([]byte(order.OrderUID), data); err != nil {
-			log.Printf("failed: %v", err)
+		// Возможно испортим сообщение
+		data, reason := cor.Maybe(order, data)
+		if reason != "" {
+			logg.Warn("sending bad message",
+				slog.String("order_uid", order.OrderUID),
+				slog.String("reason", reason),
+			)
+		}
+
+		sendCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		err = producer.SendWithContext(sendCtx, []byte(order.OrderUID), data)
+		cancel()
+		if err != nil {
+			logg.Error("send failed", slog.Any("err", err))
 		} else {
-			log.Printf("sent order %s", order.OrderUID)
+			logg.Debug("sent order", slog.String("order_uid", order.OrderUID))
 		}
 
-		time.Sleep(interval)
-		i++
-		if count > 0 && i >= count {
-			break
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(cfg.Interval):
 		}
 	}
-}
-
-func checkKafkaConnection(broker string) error {
-	conn, err := k.Dial("tcp", broker)
-	if err != nil {
-		return fmt.Errorf("failed to connect to kafka: %w", err)
-	}
-	defer conn.Close()
-
-	// пробуем получить список топиков
-	partitions, err := conn.ReadPartitions()
-	if err != nil {
-		return fmt.Errorf("failed to read partitions: %w", err)
-	}
-
-	fmt.Printf("Kafka connected, %d partitions found\n", len(partitions))
-	return nil
 }
