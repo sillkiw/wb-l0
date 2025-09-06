@@ -57,7 +57,7 @@ flowchart LR
 
 ### 1) Подготовьте `.env`
 
-Минимум для локалки (значения по умолчанию уже зашиты в compose):
+Значения по умолчанию уже зашиты в compose:
 
 ```env
 COMPOSE_PROJECT_NAME=wb-l0
@@ -92,63 +92,72 @@ PRODUCER_INTERVAL=2s
 PRODUCER_BAD_RATE=0.05
 PRODUCER_BAD_KINDS=malformed,validation,unknown_field,type_mismatch,sums_mismatch,future_date
 ```
-
-### 2) Поднимите всё
-
-* **Без dev‑инструментов**:
-
+### 2) Поднимите весь стек 
 ```bash
 make up-all
 ```
-
-* **С масштабированием**:
-```
-bash
-make up-all consumer=3 emulator=2
-```
-Запуск с 2 консьюмерами и с 3 эмуляторами
-
-* **С dev‑инструментами (Kafka UI, pgAdmin):**
-
-```bash
-make up-all DEV=1
-```
-
-Откройте:
+### 3) Откройте:
 
 * Веб‑страница: [http://127.0.0.1:4000](http://127.0.0.1:4000)
-* Kafka UI: [http://127.0.0.1:8080](http://127.0.0.1:8080) (только с `DEV=1`)
-* pgAdmin: [http://127.0.0.1:15050](http://127.0.0.1:15050) (логин/пароль — из `.env`, по умолчанию [admin@example.com](mailto:admin@example.com)/admin)
-
-
-
 ---
+## Команды Makefile (шпаргалка)
 
-## Makefile
+> Профиль **dev** (Kafka-UI, pgAdmin) включается флагом `DEV=1`. `DEV=1` нужен только если хотите Kafka-UI и pgAdmin.
 
-
-```bash
-make up            # поднять текущее окружение
-make down          # остановить
-make down-v        # остановить и удалить volumes (осторожно!)
-make ps            # состояние контейнеров
-make logs S=web    # логи конкретного сервиса
-make restart S=consumer
-
-# миграции (используется профиль tooling)
-make mig-up
-make mig-down
-make mig-down-all
-make mig-version
-make mig-new name=create_orders_table
-```
-
-Dev‑профиль включается через `DEV=1`:
+### Базовые операции
 
 ```bash
-make up DEV=1
-make up-all DEV=1
+make up            # поднять текущий стек (без миграций)
+make down          # остановить все контейнеры
+make down-v        # остановить и УДАЛИТЬ volumes (данные БД/Кафки пропадут!)
+make ps            # список сервисов и их порты
+make logs S=web    # логи конкретного сервиса (например, web/consumer/emulator)
+make restart S=consumer  # перезапуск одного сервиса
+make config        # показать итоговую docker-compose конфигурацию
 ```
+
+### Полный запуск стека
+
+```bash
+make up-all            # infra -> wait-db -> миграции -> apps
+make up-all DEV=1      # то же + dev-сервисы (Kafka-UI, pgAdmin)
+```
+
+После `make up-all DEV=1` доступны:
+
+* Web UI: [http://127.0.0.1:4000](http://127.0.0.1:4000)
+* Kafka UI: [http://127.0.0.1:8080](http://127.0.0.1:8080)
+* pgAdmin: [http://127.0.0.1:15050](http://127.0.0.1:15050)
+
+### Масштабирование
+
+```bash
+make up consumer=3 emulator=2        # поднять с масштабированием
+make apps consumer=3 emulator=2      # перезапустить только приложения с масштабом
+```
+
+> Параметры `consumer` и `emulator` управляют числом реплик.
+
+### Миграции (profile: tooling)
+
+```bash
+make mig-up                    # применить все миграции
+make mig-down                  # откатить 1 миграцию
+make mig-down-all              # откатить все миграции
+make mig-version               # текущая версия
+make mig-new name=create_orders_table  # создать новый файл миграции
+```
+
+### Полезные примеры
+
+```bash
+make up DEV=1                       # поднять всё (без миграций) + dev-утилиты
+make up-all DEV=1 consumer=2        # полный запуск + 2 консьюмера
+make logs S=consumer                # логи консьюмера 
+make restart S=web                  # перезапустить только web
+make down-v                         # полностью снести окружение и данные
+```
+
 
 ---
 
@@ -197,7 +206,7 @@ make up-all DEV=1
 * `504 Gateway Timeout` — таймаут БД
 * `500 Internal Server Error` — иные ошибки
 
-Здоровье:
+### Здоровье:
 
 * `GET /healthz` → `200 OK`
 
