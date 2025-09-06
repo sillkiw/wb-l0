@@ -55,7 +55,6 @@ flowchart LR
 
 Основной поток: эмулятор публикует валидные/ошибочные заказы; консюмер читает, валидирует и идемпотентно пишет в БД (UPSERT). Непригодные сообщения при включенном DLQ отправляются в отдельный топик. Веб‑сервис отдаёт заказ из кэша или БД, умеет быстрый `/healthz`. Фронтенд - простая страница поиска
 
----
 
 ## Компоненты
 
@@ -120,6 +119,13 @@ PRODUCER_BAD_KINDS=malformed,validation,unknown_field,type_mismatch,sums_mismatc
 make up-all
 ```
 
+* **С масштабированием**:
+```
+bash
+make up-all consumer=3 emulator=2
+```
+Запуск с 2 консьюмерами и с 3 эмуляторами
+
 * **С dev‑инструментами (Kafka UI, pgAdmin):**
 
 ```bash
@@ -132,7 +138,7 @@ make up-all DEV=1
 * Kafka UI: [http://127.0.0.1:8080](http://127.0.0.1:8080) (только с `DEV=1`)
 * pgAdmin: [http://127.0.0.1:15050](http://127.0.0.1:15050) (логин/пароль — из `.env`, по умолчанию [admin@example.com](mailto:admin@example.com)/admin)
 
-> Масштабирование: `make up consumer=3 emulator=2`
+
 
 ---
 
@@ -188,9 +194,6 @@ make up-all DEV=1
   * `PRODUCER_COUNT` — сколько сообщений послать (0 = бесконечно).
   * `PRODUCER_INTERVAL` — интервал генерации.
   * `PRODUCER_BAD_RATE` и `PRODUCER_BAD_KINDS` — доля и виды «плохих» сообщений.
-* **Прочее**
-
-  * `TZ` — часовой пояс контейнеров (по умолчанию `Europe/Amsterdam`).
 
 ---
 
