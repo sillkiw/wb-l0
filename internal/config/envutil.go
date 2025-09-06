@@ -44,3 +44,15 @@ func durDefault(s string, def time.Duration) (time.Duration, bool) {
 	d, err := time.ParseDuration(s)
 	return d, err == nil
 }
+
+func floatDefault(s string, def float64) (float64, bool) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return def, true
+	}
+	v, err := strconv.ParseFloat(s, 64)
+	if err != nil {
+		return def, false
+	}
+	return v, true
+}

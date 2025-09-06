@@ -81,11 +81,12 @@ func (s *Storage) SaveOrder(ctx context.Context, order domain.Order) error {
 	// --- payments (UPSERT по PK transaction) ---
 	_, err = tx.ExecContext(ctx, `
 		INSERT INTO payments(
-			transaction, order_uid, currency, provider, amount, payment_dt, bank,
+			transaction, order_uid, request_id, currency, provider, amount, payment_dt, bank,
 			delivery_cost, goods_total, custom_fee
-		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10, $11)
 		ON CONFLICT (transaction) DO UPDATE SET
 			order_uid     = EXCLUDED.order_uid,
+			request_id 	  = EXCLUDED.request_id,
 			currency      = EXCLUDED.currency,
 			provider      = EXCLUDED.provider,
 			amount        = EXCLUDED.amount,
@@ -94,7 +95,7 @@ func (s *Storage) SaveOrder(ctx context.Context, order domain.Order) error {
 			delivery_cost = EXCLUDED.delivery_cost,
 			goods_total   = EXCLUDED.goods_total,
 			custom_fee    = EXCLUDED.custom_fee
-	`, order.Payment.Transaction, order.OrderUID, order.Payment.Currency,
+	`, order.Payment.Transaction, order.OrderUID, order.Payment.RequestID, order.Payment.Currency,
 		order.Payment.Provider, order.Payment.Amount, order.Payment.PaymentDT,
 		order.Payment.Bank, order.Payment.DeliveryCost,
 		order.Payment.GoodsTotal, order.Payment.CustomFee)

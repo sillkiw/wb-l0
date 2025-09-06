@@ -3,15 +3,17 @@ package httpserver
 import (
 	"embed"
 	"io/fs"
+	"net/http"
 )
 
-//go:embed static
+//go:embed static/*
 var embeddedStatic embed.FS
 
-func EmbeddedUI() fs.FS {
+// EmbeddedUI возвращает http.FileSystem поверх встроенной статики.
+func EmbeddedUI() http.FileSystem {
 	sub, err := fs.Sub(embeddedStatic, "static")
 	if err != nil {
 		panic(err)
 	}
-	return sub
+	return http.FS(sub)
 }

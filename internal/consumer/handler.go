@@ -32,7 +32,7 @@ func (h *Handler) Handle(ctx context.Context, msg kafka.Message) bool {
 	log := MsgLogger(h.log, msg)
 
 	var order domain.Order
-	log.Debug("message", slog.String("valuer", string(msg.Value)))
+	log.Debug("message")
 
 	// строгий парсинг
 	if err := validation.DecodeStrict(msg.Value, &order); err != nil {

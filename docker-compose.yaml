@@ -1,17 +1,50 @@
+
+networks:
+  internal:
+    name: wb-internal
+    driver: bridge
+    internal: true
+  public:
+    name: wb-public
+    driver: bridge
+
+volumes:
+  kafka_data:
+  pg_data:
+  pgadmin_data:
+
+
 services:
+  # ---------- Infra ----------
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-demo_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-demo}
+      POSTGRES_DB: ${POSTGRES_DB:-demo_db}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-demo_user} -d ${POSTGRES_DB:-demo_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+    networks: [internal]
+
   kafka:
     image: bitnami/kafka:3.7
     environment:
-      - KAFKA_CFG_NODE_ID=1
-      - KAFKA_CFG_PROCESS_ROLES=broker,controller
-      - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
-      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
-      - KAFKA_CFG_LISTENERS=PLAINTEXT://:${KAFKA_PORT:-9092},CONTROLLER://:9093
-      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka:${KAFKA_PORT:-9092}
-      - KAFKA_CFG_INTER_BROKER_LISTENER_NAME=PLAINTEXT
-      - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=1@kafka:9093
-      - KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE=false
-      - ALLOW_PLAINTEXT_LISTENER=yes
+      KAFKA_CFG_NODE_ID: "1"
+      KAFKA_CFG_PROCESS_ROLES: "broker,controller"
+      KAFKA_CFG_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
+      KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: "PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT"
+      KAFKA_CFG_LISTENERS: "PLAINTEXT://:${KAFKA_PORT:-9092},CONTROLLER://:9093"
+      KAFKA_CFG_ADVERTISED_LISTENERS: "PLAINTEXT://kafka:${KAFKA_PORT:-9092}"
+      KAFKA_CFG_INTER_BROKER_LISTENER_NAME: "PLAINTEXT"
+      KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: "1@kafka:9093"
+      KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE: "false"
+      ALLOW_PLAINTEXT_LISTENER: "yes"
     volumes:
       - kafka_data:/bitnami/kafka
     healthcheck:
@@ -20,22 +53,137 @@ services:
       timeout: 5s
       retries: 30
     restart: unless-stopped
-
-  postgres:
-    image: postgres:15
+    networks: [internal]
+  topic-init:
+    image: bitnami/kafka:3.7
+    depends_on:
+      kafka:
+        condition: service_healthy
+    restart: "no"
+    entrypoint:
+      - bash
+      - -lc
+      - |
+        echo "Waiting for Kafka..."
+        for i in {1..30}; do
+          /opt/bitnami/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --list >/dev/null 2>&1 && break
+          sleep 2
+        done
+        echo "Ensuring topics..."
+        /opt/bitnami/kafka/bin/kafka-topics.sh --create --if-not-exists \
+          --bootstrap-server kafka:9092 --topic orders --partitions 12 --replication-factor 1
+        /opt/bitnami/kafka/bin/kafka-topics.sh --create --if-not-exists \
+          --bootstrap-server kafka:9092 --topic orders-dlq --partitions 12 --replication-factor 1
+        echo "Done."
+    networks: [internal]
+  # ---------- Apps ----------
+  web:
+    build:
+      context: .
+      dockerfile: cmd/web/Dockerfile
+    container_name: ${COMPOSE_PROJECT_NAME:-wb-l0}_web
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "${HTTP_PORT_EXT:-4000}:4000"
     environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
-    volumes:
-      - pg_data:/var/lib/postgresql/data
+      APP_ENV:        ${APP_ENV:-docker}
+      HTTP_ADDR:      ${HTTP_ADDR:-:4000}
+      LOG_FORMAT:     ${LOG_FORMAT:-json}
+      LOG_LEVEL:      ${LOG_LEVEL:-INFO}
+      CACHE_SIZE:     ${CACHE_SIZE:-1000}
+      CACHE_TTL:      ${CACHE_TTL:-30s}
+      DATABASE_URL:   ${DATABASE_URL:-postgres://demo_user:demo@postgres:5432/demo_db?sslmode=disable}
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
-      interval: 5s
-      timeout: 5s
-      retries: 20
+      test: ["CMD", "wget", "-qO-", "http://localhost:4000/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
     restart: unless-stopped
+    networks: [internal,public]
 
-volumes:
-  kafka_data:
-  pg_data:
+  consumer:
+    build:
+      context: .
+      dockerfile: cmd/consumer/Dockerfile
+    depends_on:
+      kafka:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      topic-init:
+        condition: service_completed_successfully
+    environment:
+      APP_ENV:                  ${APP_ENV:-docker}
+      LOG_FORMAT:               ${LOG_FORMAT:-json}
+      LOG_LEVEL:                ${LOG_LEVEL:-INFO}
+      KAFKA_BOOTSTRAP_INTERNAL: ${KAFKA_BOOTSTRAP_INTERNAL:-kafka:9092}
+      KAFKA_BOOTSTRAP_EXTERNAL: ${KAFKA_BOOTSTRAP_EXTERNAL:-kafka:9092}
+      KAFKA_TOPIC:              ${KAFKA_TOPIC:-orders}
+      KAFKA_GROUP_ID:           ${KAFKA_GROUP_ID:-orders-consumer}
+      KAFKA_DLQ_TOPIC:          ${KAFKA_DLQ_TOPIC:-orders-dlq}
+      DATABASE_URL:             ${DATABASE_URL:-postgres://demo_user:demo@postgres:5432/demo_db?sslmode=disable}
+    restart: unless-stopped
+    networks: [internal]
+
+  emulator:
+    build:
+      context: .
+      dockerfile: cmd/emulator/Dockerfile
+    depends_on:
+      kafka:
+        condition: service_healthy
+      topic-init:
+        condition: service_completed_successfully
+    environment:
+      APP_ENV:                  ${APP_ENV:-docker}
+      LOG_FORMAT:               ${LOG_FORMAT:-json}
+      LOG_LEVEL:                ${LOG_LEVEL:-INFO}
+      KAFKA_BOOTSTRAP_INTERNAL: kafka:9092 
+      KAFKA_BOOTSTRAP_EXTERNAL: ${KAFKA_BOOTSTRAP_EXTERNAL:-kafka:9092}
+      KAFKA_TOPIC:              ${KAFKA_TOPIC:-orders}
+      PRODUCER_COUNT:           ${PRODUCER_COUNT:-0}
+      PRODUCER_INTERVAL:        ${PRODUCER_INTERVAL:-2s}
+      PRODUCER_BAD_RATE:        ${PRODUCER_BAD_RATE:-0.05}
+      PRODUCER_BAD_KINDS:       ${PRODUCER_BAD_KINDS:-malformed,validation,unknown_field,type_mismatch,sums_mismatch,future_date}
+    restart: unless-stopped
+    networks: [internal]
+  migrate:
+    image: migrate/migrate:latest
+    profiles: ["tooling"]
+    volumes:
+      - ./db/migrations:/migrations
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-demo_user}:${POSTGRES_PASSWORD:-demo}@postgres:5432/${POSTGRES_DB:-demo_db}?sslmode=disable
+    entrypoint: ["migrate","-path","/migrations","-database","${DATABASE_URL}"]
+    networks: [internal]
+  # ---------- Dev ----------
+  kafka-ui:
+    profiles: ["dev"]                 # ← только в dev
+    image: provectuslabs/kafka-ui:latest
+    depends_on:
+      kafka:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8080:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: "kafka:${KAFKA_PORT:-9092}"
+      DYNAMIC_CONFIG_ENABLED: "true"
+    networks: [internal,public]
+
+  pgadmin:
+    profiles: ["dev"]                 # ← только в dev
+    image: dpage/pgadmin4
+    ports:
+      - "127.0.0.1:${PGADMIN_PORT:-15050}:80"
+    environment:
+      PGADMIN_DEFAULT_EMAIL:    ${PGADMIN_DEFAULT_EMAIL:-admin@example.com}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:-admin}
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [internal,public]

@@ -24,7 +24,7 @@ func selectBootstrap(env Env) Bootstrap {
 			Brokers: splitCSV(get("KAFKA_BOOTSTRAP_EXTERNAL", "")),
 			DSN:     get("DATABASE_URL", ""),
 		}
-	default: // docker
+	default:
 		return Bootstrap{
 			Brokers: splitCSV(get("KAFKA_BOOTSTRAP_EXTERNAL", "")),
 			DSN:     get("DATABASE_URL_HOST", ""),

@@ -2,6 +2,7 @@ package config
 
 import (
 	"log/slog"
+	"strings"
 	"time"
 )
 
@@ -31,6 +32,17 @@ func LoadProducer() ProducerConfig {
 		slog.Warn("config: bad PRODUCER_INTERVAL, use 2s")
 	}
 
+	rate, ok3 := floatDefault(get("PRODUCER_BAD_RATE", "0"), 0)
+	if !ok3 {
+		slog.Warn("config: bad PRODUCER_BAD_RATE, use 0")
+	}
+	if rate < 0 {
+		rate = 0
+	} else if rate > 1 {
+		rate = 1
+	}
+	kinds := strings.TrimSpace(get("PRODUCER_BAD_KINDS", ""))
+
 	cfg := ProducerConfig{
 		AppEnv:       env,
 		KafkaBrokers: b.Brokers,
@@ -39,10 +51,11 @@ func LoadProducer() ProducerConfig {
 		LogLevel:     get("LOG_LEVEL", "INFO"),
 		Count:        count,
 		Interval:     interval,
+		BadRate:      rate,
+		BadKinds:     kinds,
 	}
 	if len(cfg.KafkaBrokers) == 0 {
 		slog.Warn("config: empty Kafka bootstrap")
 	}
 	return cfg
-
 }
